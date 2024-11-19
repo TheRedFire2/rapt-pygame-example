@@ -1,0 +1,188 @@
+import pygame
+import random
+import sys
+
+# Inizializza Pygame
+pygame.init()
+
+# Dimensioni finestra
+WIDTH, HEIGHT = 800, 600
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
+pygame.display.set_caption("The Asylum's Curse")
+
+# Colori
+BLACK = (0, 0, 0)
+WHITE = (255, 255, 255)
+RED = (255, 0, 0)
+GRAY = (50, 50, 50)
+
+# Clock
+clock = pygame.time.Clock()
+
+# Torcia
+TORCH_RADIUS = 150
+
+# Caricamento immagini e suoni
+player_image = pygame.image.load("player.png").convert_alpha()
+monster_image = pygame.image.load("monster.png").convert_alpha()
+key_image = pygame.image.load("key.png").convert_alpha()
+
+# Scaled images
+player_image = pygame.transform.scale(player_image, (40, 40))
+monster_image = pygame.transform.scale(monster_image, (50, 50))
+key_image = pygame.transform.scale(key_image, (30, 30))
+
+# Classe giocatore
+class Player(pygame.sprite.Sprite):
+    def __init__(self, x, y):
+        super().__init__()
+        self.image = player_image
+        self.rect = self.image.get_rect(center=(x, y))
+        self.speed = 5
+        self.keys_collected = 0
+
+    def move(self, dx, dy):
+        self.rect.x += dx * self.speed
+        self.rect.y += dy * self.speed
+
+        # Limiti finestra
+        self.rect.clamp_ip(screen.get_rect())
+
+# Classe mostro
+class Monster(pygame.sprite.Sprite):
+    def __init__(self, x, y):
+        super().__init__()
+        self.image = monster_image
+        self.rect = self.image.get_rect(center=(x, y))
+        self.speed = 3
+
+    def follow(self, player):
+        if self.rect.x < player.rect.x:
+            self.rect.x += self.speed
+        if self.rect.x > player.rect.x:
+            self.rect.x -= self.speed
+        if self.rect.y < player.rect.y:
+            self.rect.y += self.speed
+        if self.rect.y > player.rect.y:
+            self.rect.y -= self.speed
+
+# Classe chiavi
+class Key(pygame.sprite.Sprite):
+    def __init__(self, x, y):
+        super().__init__()
+        self.image = key_image
+        self.rect = self.image.get_rect(center=(x, y))
+
+# Funzione per mostrare testo
+def draw_text(text, size, color, x, y):
+    font = pygame.font.Font(None, size)
+    surface = font.render(text, True, color)
+    screen.blit(surface, (x, y))
+
+# Funzione per disegnare pulsanti
+def draw_button(x, y, width, height, color, text):
+    pygame.draw.rect(screen, color, (x, y, width, height))
+    draw_text(text, 30, WHITE, x + 10, y + 10)
+
+# Setup
+player = Player(WIDTH // 2, HEIGHT // 2)
+monster = Monster(random.randint(50, WIDTH - 50), random.randint(50, HEIGHT - 50))
+keys = pygame.sprite.Group()
+for _ in range(3):
+    keys.add(Key(random.randint(50, WIDTH - 50), random.randint(50, HEIGHT - 50)))
+
+player_group = pygame.sprite.Group(player)
+monster_group = pygame.sprite.Group(monster)
+
+game_over = False
+positive_ending = False
+
+# Loop principale
+while not game_over:
+    screen.fill(BLACK)
+
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            pygame.quit()
+            sys.exit()
+
+    # Controlli touch (pulsanti virtuali)
+    touch_inputs = {"up": False, "down": False, "left": False, "right": False}
+    mouse_pressed = pygame.mouse.get_pressed()
+    if mouse_pressed[0]:  # Se c'è un tocco/click
+        mx, my = pygame.mouse.get_pos()
+
+        # Controlla quale pulsante è premuto
+        if 50 < mx < 150 and HEIGHT - 150 < my < HEIGHT - 50:  # Pulsante "SU"
+            touch_inputs["up"] = True
+        if 50 < mx < 150 and HEIGHT - 50 < my < HEIGHT:  # Pulsante "GIÙ"
+            touch_inputs["down"] = True
+        if 0 < mx < 50 and HEIGHT - 100 < my < HEIGHT - 50:  # Pulsante "SINISTRA"
+            touch_inputs["left"] = True
+        if 150 < mx < 200 and HEIGHT - 100 < my < HEIGHT - 50:  # Pulsante "DESTRA"
+            touch_inputs["right"] = True
+
+    # Movimento giocatore
+    dx, dy = 0, 0
+    if touch_inputs["up"]:
+        dy = -1
+    if touch_inputs["down"]:
+        dy = 1
+    if touch_inputs["left"]:
+        dx = -1
+    if touch_inputs["right"]:
+        dx = 1
+
+    player.move(dx, dy)
+
+    # Mostro segue il giocatore
+    monster.follow(player)
+
+    # Controlla collisione giocatore-chiavi
+    for key in keys:
+        if player.rect.colliderect(key.rect):
+            keys.remove(key)
+            player.keys_collected += 1
+
+    # Controlla se il mostro cattura il giocatore
+    if player.rect.colliderect(monster.rect):
+        game_over = True
+
+    # Disegna torcia (luce attorno al giocatore)
+    torch_surface = pygame.Surface((WIDTH, HEIGHT))
+    torch_surface.fill(BLACK)
+    pygame.draw.circle(torch_surface, WHITE, player.rect.center, TORCH_RADIUS)
+    torch_surface.set_alpha(200)
+    screen.blit(torch_surface, (0, 0), special_flags=pygame.BLEND_RGBA_SUB)
+
+    # Disegna oggetti
+    player_group.draw(screen)
+    monster_group.draw(screen)
+    keys.draw(screen)
+
+    # Disegna pulsanti virtuali
+    draw_button(50, HEIGHT - 150, 100, 50, GRAY, "UP")
+    draw_button(50, HEIGHT - 50, 100, 50, GRAY, "DOWN")
+    draw_button(0, HEIGHT - 100, 50, 50, GRAY, "LEFT")
+    draw_button(150, HEIGHT - 100, 50, 50, GRAY, "RIGHT")
+
+    # Mostra chiavi raccolte
+    draw_text(f"Chiavi raccolte: {player.keys_collected}/3", 30, WHITE, 10, 10)
+
+    # Controlla fine gioco
+    if player.keys_collected == 3:
+        positive_ending = True
+        game_over = True
+
+    pygame.display.flip()
+    clock.tick(60)
+
+# Schermata finale
+screen.fill(BLACK)
+if positive_ending:
+    draw_text("Sei scappato! Finale positivo!", 50, WHITE, WIDTH // 4, HEIGHT // 2)
+else:
+    draw_text("Il mostro ti ha preso. Finale negativo!", 50, RED, WIDTH // 4, HEIGHT // 2)
+pygame.display.flip()
+pygame.time.wait(3000)
+pygame.quit()
